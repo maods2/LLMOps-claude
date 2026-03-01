@@ -1,0 +1,24 @@
+# Default model configuration (~302M parameters)
+# Override individual fields via CLI or environment variables.
+
+model:
+  vocab_size: 32000
+  max_seq_len: 512
+  n_layers: 24
+  hidden_size: 1024
+  intermediate_size: 4096
+  n_heads: 16
+  n_kv_heads: null        # null = full MHA; set to 8 for GQA
+  dropout: 0.0
+  attention_dropout: 0.0
+  use_rope: true
+  rope_theta: 10000.0
+  use_flash_attention: false  # set true if flash-attn installed
+  use_gradient_checkpointing: true
+  tie_word_embeddings: true
+  dtype: bfloat16
+  init_std: 0.02
+  rms_norm_eps: 1.0e-6
+  pad_token_id: 0
+  bos_token_id: 1
+  eos_token_id: 2

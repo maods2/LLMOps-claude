@@ -1,0 +1,34 @@
+# Supervised Fine-Tuning configuration
+
+defaults:
+  - model
+
+sft:
+  output_dir: ./checkpoints/sft
+  resume_from: null
+  base_model_path: ./checkpoints/pretrain/best
+
+  max_steps: 3000
+  eval_interval: 200
+  save_interval: 500
+  log_interval: 10
+
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  beta1: 0.9
+  beta2: 0.999
+  grad_clip: 1.0
+  warmup_steps: 100
+
+  batch_size: 4
+  gradient_accumulation_steps: 8
+
+  dtype: bfloat16
+  gradient_checkpointing: true
+  early_stopping_patience: 5
+
+data:
+  train_path: ./data/sft_train.jsonl
+  val_path: ./data/sft_val.jsonl
+  max_seq_len: 512
+  template: "### Instruction:\n{instruction}\n\n### Response:\n{response}"

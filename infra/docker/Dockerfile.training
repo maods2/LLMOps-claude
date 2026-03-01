@@ -1,0 +1,103 @@
+# ============================================================
+# LLM Stack – Training Image
+# ============================================================
+# Multi-stage build for a lean final image.
+#
+# Usage:
+#   docker build -f infra/docker/Dockerfile.training -t llm-stack-training .
+#   docker run --gpus all -v $(pwd)/checkpoints:/app/checkpoints \
+#              -e STAGE=pretrain llm-stack-training
+# ============================================================
+
+# ------- Stage 1: dependency builder -------
+FROM nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04 AS builder
+
+LABEL maintainer="llm-stack"
+LABEL description="Training image for LLM Stack (~300M parameter transformer)"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    git \
+    curl \
+    wget \
+    build-essential \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3.10 -m pip install --upgrade pip setuptools wheel
+
+# Install Python dependencies in a virtual env
+WORKDIR /build
+COPY pyproject.toml ./
+RUN pip install --prefix=/install \
+    torch==2.2.0+cu122 \
+    --index-url https://download.pytorch.org/whl/cu122 && \
+    pip install --prefix=/install \
+    transformers>=4.39.0 \
+    datasets>=2.18.0 \
+    accelerate>=0.28.0 \
+    peft>=0.10.0 \
+    trl>=0.8.0 \
+    bitsandbytes>=0.43.0 \
+    pydantic>=2.6.0 \
+    pydantic-settings>=2.2.0 \
+    omegaconf>=2.3.0 \
+    hydra-core>=1.3.0 \
+    numpy>=1.26.0 \
+    structlog>=24.1.0 \
+    prometheus-client>=0.20.0 \
+    mlflow>=2.11.0 \
+    rich>=13.7.0 \
+    typer>=0.12.0 \
+    tqdm>=4.66.0 \
+    einops>=0.7.0 \
+    psutil>=5.9.0 \
+    boto3>=1.34.0 \
+    tokenizers>=0.15.0
+
+# ------- Stage 2: final runtime image -------
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    # Training defaults (overridable at runtime)
+    STAGE=pretrain \
+    OUTPUT_DIR=/app/checkpoints \
+    DATA_CACHE=/app/data_cache \
+    LOG_LEVEL=INFO \
+    DTYPE=bfloat16
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    libgomp1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
+WORKDIR /app
+COPY . .
+
+# Create required directories
+RUN mkdir -p /app/checkpoints /app/data_cache /app/logs
+
+# Entry point script
+COPY infra/docker/entrypoint_training.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+VOLUME ["/app/checkpoints", "/app/data_cache", "/app/logs"]
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["pretrain"]

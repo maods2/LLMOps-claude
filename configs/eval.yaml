@@ -1,0 +1,38 @@
+# Evaluation configuration
+
+eval:
+  model_path: ./checkpoints/pretrain/best
+  output_dir: ./eval_results
+  dtype: bfloat16
+  batch_size: 8
+
+benchmarks:
+  - name: wikitext2_perplexity
+    type: perplexity
+    dataset_path: null   # Will use wikitext2 val set
+    perplexity_config:
+      max_seq_len: 512
+      batch_size: 8
+      max_batches: 100
+      dtype: bfloat16
+
+  - name: generation_coherence
+    type: generation
+    prompts:
+      - "Once upon a time in a land far away,"
+      - "The scientist discovered that"
+      - "In 1969, humanity achieved"
+    generation_config:
+      max_new_tokens: 64
+      temperature: 0.8
+      top_p: 0.9
+      do_sample: true
+
+  - name: basic_completion
+    type: regression
+    prompts:
+      - "2 + 2 ="
+      - "The capital of France is"
+    generation_config:
+      max_new_tokens: 16
+      do_sample: false

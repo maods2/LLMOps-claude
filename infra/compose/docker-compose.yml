@@ -1,0 +1,226 @@
+# ============================================================
+# LLM Stack – Docker Compose
+# ============================================================
+# Profiles:
+#   dev:        training + serving with GPU (bfloat16 + vLLM)
+#   production: training + serving with GPU (same GPU config,
+#               adds resource limits / restart policies)
+#
+# Both profiles require the NVIDIA Container Toolkit installed
+# on the host (https://docs.nvidia.com/datacenter/cloud-native/).
+# To run without a GPU set NVIDIA_VISIBLE_DEVICES=none in your
+# environment before calling docker compose.
+#
+# Usage:
+#   docker compose --profile dev up            # dev GPU stack  ← default
+#   docker compose --profile production up     # production GPU stack
+#   NVIDIA_VISIBLE_DEVICES=none \
+#     docker compose --profile dev up          # CPU-only fallback
+# ============================================================
+
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Shared configuration anchors
+# ---------------------------------------------------------------------------
+x-gpu-resources: &gpu-resources
+  reservations:
+    devices:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
+
+x-common-env: &common-env
+  PYTHONPATH: /app
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  JSON_LOGS: ${JSON_LOGS:-true}
+  ENVIRONMENT: ${ENVIRONMENT:-production}
+
+x-volumes: &common-volumes
+  - ${HOST_CHECKPOINTS:-./checkpoints}:/app/checkpoints
+  - ${HOST_DATA_CACHE:-./data_cache}:/app/data_cache
+  - ${HOST_LOGS:-./logs}:/app/logs
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+services:
+
+  # ---- Training service ----
+  training:
+    image: llm-stack-training:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.training
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: llm-stack-training
+    restart: "no"
+    command: ["${TRAINING_STAGE:-pretrain}"]
+    environment:
+      <<: *common-env
+      STAGE: ${TRAINING_STAGE:-pretrain}
+      OUTPUT_DIR: /app/checkpoints
+      DATA_CACHE: /app/data_cache
+      DTYPE: ${DTYPE:-bfloat16}
+      # Optionally override S3/GCS for checkpoint upload
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      S3_CHECKPOINT_BUCKET: ${S3_CHECKPOINT_BUCKET:-}
+    volumes: *common-volumes
+    deploy:
+      resources:
+        <<: *gpu-resources
+    shm_size: "2gb"
+    profiles:
+      - production
+
+  # ---- Training service (dev – GPU enabled) ----
+  training-dev:
+    image: llm-stack-training:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.training
+    container_name: llm-stack-training-dev
+    restart: "no"
+    command: ["${TRAINING_STAGE:-pretrain}"]
+    environment:
+      <<: *common-env
+      STAGE: ${TRAINING_STAGE:-pretrain}
+      OUTPUT_DIR: /app/checkpoints
+      DATA_CACHE: /app/data_cache
+      DTYPE: ${DTYPE:-bfloat16}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+    volumes: *common-volumes
+    deploy:
+      resources:
+        <<: *gpu-resources
+    shm_size: "2gb"
+    profiles:
+      - dev
+
+  # ---- Serving service ----
+  serving:
+    image: llm-stack-serving:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.serving
+    container_name: llm-stack-serving
+    restart: unless-stopped
+    ports:
+      - "${SERVING_PORT:-8000}:8000"
+      - "${METRICS_PORT:-8090}:8090"
+    environment:
+      <<: *common-env
+      MODEL_PATH: /app/checkpoints/${MODEL_CHECKPOINT:-pretrain/final}
+      USE_VLLM: ${USE_VLLM:-true}
+      DTYPE: ${DTYPE:-bfloat16}
+      MAX_SEQ_LEN: ${MAX_SEQ_LEN:-512}
+      GPU_MEM_UTIL: ${GPU_MEM_UTIL:-0.85}
+      MODEL_VERSION: ${MODEL_VERSION:-latest}
+    volumes:
+      - ${HOST_CHECKPOINTS:-./checkpoints}:/app/checkpoints:ro
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        <<: *gpu-resources
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - production
+
+  # ---- Serving service (dev – GPU enabled) ----
+  serving-dev:
+    image: llm-stack-serving:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.serving
+    container_name: llm-stack-serving-dev
+    restart: unless-stopped
+    ports:
+      - "${SERVING_PORT:-8000}:8000"
+      - "${METRICS_PORT:-8090}:8090"
+    environment:
+      <<: *common-env
+      MODEL_PATH: /app/checkpoints/${MODEL_CHECKPOINT:-pretrain/final}
+      USE_VLLM: ${USE_VLLM:-true}
+      DTYPE: ${DTYPE:-bfloat16}
+      MAX_SEQ_LEN: ${MAX_SEQ_LEN:-512}
+      GPU_MEM_UTIL: ${GPU_MEM_UTIL:-0.85}
+      MODEL_VERSION: ${MODEL_VERSION:-latest}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+    volumes:
+      - ${HOST_CHECKPOINTS:-./checkpoints}:/app/checkpoints:ro
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        <<: *gpu-resources
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - dev
+
+  # ---- Prometheus ----
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: llm-stack-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../compose/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    profiles:
+      - dev
+      - production
+
+  # ---- MLflow ----
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.0
+    container_name: llm-stack-mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri /mlflow
+      --default-artifact-root /mlflow/artifacts
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    profiles:
+      - dev
+      - production
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  prometheus_data:
+  mlflow_data:
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  default:
+    name: llm-stack-network
+    driver: bridge

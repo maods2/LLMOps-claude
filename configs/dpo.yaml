@@ -1,0 +1,35 @@
+# DPO (Direct Preference Optimisation) configuration
+
+defaults:
+  - model
+
+dpo:
+  output_dir: ./checkpoints/dpo
+  base_model_path: ./checkpoints/sft/best
+  ref_model_path: ./checkpoints/sft/best   # frozen reference
+
+  # DPO-specific
+  beta: 0.1                    # KL penalty coefficient
+  reference_free: false        # Set true to skip reference model
+  offload_ref_to_cpu: true     # Save GPU VRAM by running ref on CPU
+
+  max_steps: 1000
+  eval_interval: 100
+  save_interval: 200
+  log_interval: 10
+
+  learning_rate: 5.0e-6
+  weight_decay: 0.01
+  warmup_steps: 50
+  grad_clip: 1.0
+
+  batch_size: 2
+  gradient_accumulation_steps: 8
+
+  dtype: bfloat16
+  gradient_checkpointing: true
+
+data:
+  train_path: ./data/dpo_train.jsonl    # format: {prompt, chosen, rejected}
+  val_path: ./data/dpo_val.jsonl
+  max_seq_len: 512

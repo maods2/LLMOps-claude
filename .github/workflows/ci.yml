@@ -1,0 +1,337 @@
+name: CI – LLM Stack
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: ci-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.10"
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # 1. LINT
+  # ──────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff==0.3.7
+
+      - name: Run ruff check
+        run: ruff check . --output-format=github
+
+      - name: Run ruff format check
+        run: ruff format --check .
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 2. TYPE CHECK
+  # ──────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install mypy pydantic>=2.6.0 torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run mypy
+        run: |
+          mypy services/training/core_model/ \
+               services/data/ \
+               observability/ \
+               --ignore-missing-imports \
+               --no-strict-optional
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 3. UNIT + INTEGRATION TESTS
+  # ──────────────────────────────────────────────────────────────────────────
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # CPU-only torch for CI
+          pip install torch==2.2.0+cpu --index-url https://download.pytorch.org/whl/cpu
+          pip install \
+            transformers>=4.39.0 \
+            datasets>=2.18.0 \
+            peft>=0.10.0 \
+            trl>=0.8.0 \
+            pydantic>=2.6.0 \
+            structlog>=24.1.0 \
+            prometheus-client>=0.20.0 \
+            fastapi>=0.110.0 \
+            httpx>=0.27.0 \
+            pytest>=8.1.0 \
+            pytest-asyncio>=0.23.0 \
+            pytest-cov>=5.0.0 \
+            pytest-mock>=3.14.0 \
+            anyio>=4.3.0 \
+            uvicorn>=0.28.0 \
+            tokenizers>=0.15.0 \
+            einops>=0.7.0
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ \
+            -v \
+            --tb=short \
+            -m "not slow and not gpu" \
+            --cov=services \
+            --cov=evaluation \
+            --cov=observability \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --timeout=120
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ \
+            -v \
+            --tb=short \
+            -m "not slow and not gpu" \
+            --timeout=180
+
+      - name: Run serving tests
+        run: |
+          pytest tests/serving/ \
+            -v \
+            --tb=short \
+            -m "not slow and not gpu" \
+            --timeout=60
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 4. VALIDATE TRAINING STEP
+  # ──────────────────────────────────────────────────────────────────────────
+  validate-training:
+    name: Validate mini training step
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    needs: [lint, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch==2.2.0+cpu --index-url https://download.pytorch.org/whl/cpu
+          pip install pydantic>=2.6.0 structlog>=24.1.0 transformers>=4.39.0
+
+      - name: Validate model forward pass
+        run: |
+          python3 -c "
+          import torch
+          from services.training.core_model.config import ModelConfig
+          from services.training.core_model.model import LLMModel
+
+          cfg = ModelConfig(vocab_size=256, max_seq_len=16, n_layers=2, hidden_size=64, intermediate_size=128, n_heads=4, dtype='float32')
+          model = LLMModel(cfg)
+          print(f'Model parameters: {model.num_parameters():,}')
+
+          x = torch.randint(0, 256, (2, 8))
+          labels = x.clone()
+          out = model(x, labels=labels)
+          print(f'Forward pass OK: loss={out.loss.item():.4f}')
+          out.loss.backward()
+          print('Backward pass OK')
+          print('TRAINING VALIDATION: PASSED')
+          "
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 5. VALIDATE SERVING ENDPOINT
+  # ──────────────────────────────────────────────────────────────────────────
+  validate-serving:
+    name: Validate inference endpoint
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+    needs: [lint, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch==2.2.0+cpu --index-url https://download.pytorch.org/whl/cpu
+          pip install \
+            fastapi>=0.110.0 \
+            httpx>=0.27.0 \
+            pydantic>=2.6.0 \
+            structlog>=24.1.0 \
+            prometheus-client>=0.20.0 \
+            uvicorn>=0.28.0 \
+            transformers>=4.39.0 \
+            pytest>=8.1.0 \
+            pytest-asyncio>=0.23.0 \
+            pytest-mock>=3.14.0 \
+            anyio>=4.3.0
+
+      - name: Run serving validation tests
+        run: |
+          pytest tests/serving/test_api.py \
+            -v \
+            --tb=short \
+            -k "health or version" \
+            --timeout=60
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 6. BUILD DOCKER IMAGES
+  # ──────────────────────────────────────────────────────────────────────────
+  build-docker:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    needs: [test, validate-training, validate-serving]
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build training image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.training
+          push: false
+          tags: llm-stack-training:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build serving image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.serving
+          push: false
+          tags: llm-stack-serving:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 7. PUSH DOCKER IMAGES (only on main push)
+  # ──────────────────────────────────────────────────────────────────────────
+  push-docker:
+    name: Push Docker images
+    runs-on: ubuntu-latest
+    needs: [build-docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push training image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.training
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/llm-stack-training:latest
+            ${{ env.REGISTRY }}/llm-stack-training:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push serving image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.serving
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/llm-stack-serving:latest
+            ${{ env.REGISTRY }}/llm-stack-serving:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 8. REQUIRED STATUS CHECK (gates merge)
+  # ──────────────────────────────────────────────────────────────────────────
+  # This job must pass for merges to be allowed via branch protection rules.
+  ci-gate:
+    name: CI Gate (required)
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - typecheck
+      - test
+      - validate-training
+      - validate-serving
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ||
+                "${{ needs.typecheck.result }}" != "success" ||
+                "${{ needs.test.result }}" != "success" ||
+                "${{ needs.validate-training.result }}" != "success" ||
+                "${{ needs.validate-serving.result }}" != "success" ]]; then
+            echo "One or more required CI jobs failed."
+            exit 1
+          fi
+          echo "All CI checks passed."

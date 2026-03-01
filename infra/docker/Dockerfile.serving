@@ -1,0 +1,76 @@
+# ============================================================
+# LLM Stack – Serving Image (vLLM + FastAPI)
+# ============================================================
+#
+# Usage:
+#   docker build -f infra/docker/Dockerfile.serving -t llm-stack-serving .
+#   docker run --gpus all -p 8000:8000 \
+#     -e MODEL_PATH=/models/pretrain/best \
+#     -v /host/checkpoints:/models \
+#     llm-stack-serving
+# ============================================================
+
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+
+LABEL maintainer="llm-stack"
+LABEL description="Serving image for LLM Stack with vLLM + FastAPI"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    # Serving defaults
+    MODEL_PATH=/models/pretrain/best \
+    USE_VLLM=true \
+    DTYPE=bfloat16 \
+    MAX_SEQ_LEN=512 \
+    GPU_MEM_UTIL=0.85 \
+    LOG_LEVEL=INFO \
+    JSON_LOGS=true \
+    ENVIRONMENT=production \
+    PORT=8000 \
+    METRICS_PORT=8090
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    curl \
+    libgomp1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip
+
+# Install serving dependencies
+RUN pip install --no-cache-dir \
+    torch==2.2.0+cu122 \
+    --index-url https://download.pytorch.org/whl/cu122
+
+RUN pip install --no-cache-dir \
+    vllm>=0.4.0 \
+    fastapi>=0.110.0 \
+    uvicorn[standard]>=0.28.0 \
+    httpx>=0.27.0 \
+    transformers>=4.39.0 \
+    pydantic>=2.6.0 \
+    structlog>=24.1.0 \
+    prometheus-client>=0.20.0 \
+    psutil>=5.9.0
+
+# Copy application code
+WORKDIR /app
+COPY . .
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+EXPOSE ${PORT} ${METRICS_PORT}
+
+CMD uvicorn services.serving.api.app:app \
+    --host 0.0.0.0 \
+    --port ${PORT} \
+    --workers 1 \
+    --loop uvloop \
+    --access-log \
+    --log-level ${LOG_LEVEL,,}

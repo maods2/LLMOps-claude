@@ -1,0 +1,92 @@
+---
+# LLM Stack – Kubernetes Training Job
+# Runs one training stage to completion (uses Job, not Deployment).
+#
+# Usage:
+#   kubectl apply -f infra/k8s/training-job.yaml
+#   kubectl logs -f job/llm-training
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-training
+  namespace: llm-stack
+  labels:
+    app: llm-stack
+    component: training
+    stage: pretrain
+spec:
+  backoffLimit: 2
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        app: llm-stack
+        component: training
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: training
+          image: ${REGISTRY}/llm-stack-training:${IMAGE_TAG:-latest}
+          imagePullPolicy: IfNotPresent
+          command: ["pretrain"]
+          env:
+            - name: STAGE
+              value: "pretrain"
+            - name: OUTPUT_DIR
+              value: "/app/checkpoints"
+            - name: DTYPE
+              value: "bfloat16"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: llm-stack-config
+                  key: mlflow_tracking_uri
+                  optional: true
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: llm-stack-aws-credentials
+                  key: access_key_id
+                  optional: true
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-stack-aws-credentials
+                  key: secret_access_key
+                  optional: true
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: checkpoints
+              mountPath: /app/checkpoints
+            - name: data-cache
+              mountPath: /app/data_cache
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: checkpoints
+          persistentVolumeClaim:
+            claimName: llm-checkpoints-pvc
+        - name: data-cache
+          persistentVolumeClaim:
+            claimName: llm-data-cache-pvc
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "2Gi"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      nodeSelector:
+        accelerator: nvidia-gpu
