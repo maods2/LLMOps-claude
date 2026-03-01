@@ -60,8 +60,8 @@ help:
 	@echo "    make evaluate         Run evaluation benchmarks"
 	@echo ""
 	@echo "  Serving"
-	@echo "    make serve            Start production API server (GPU, vLLM)"
-	@echo "    make serve-dev        Start development API server (GPU, hot-reload)"
+	@echo "    make serve            Start production API server (requires GPU)"
+	@echo "    make serve-dev        Start development API server (CPU)"
 	@echo ""
 	@echo "  Docker"
 	@echo "    make docker-build     Build training + serving Docker images"
@@ -262,9 +262,9 @@ serve:
 		--host 0.0.0.0 --port 8000 --workers 1 --loop uvloop
 
 serve-dev:
-	@echo "[serve-dev] Starting development API server on :8000 (GPU, hot-reload)..."
+	@echo "[serve-dev] Starting development API server on :8000 (CPU mode)..."
 	PYTHONPATH=. MODEL_PATH=$(CHECKPOINT_DIR)/pretrain/final \
-		USE_VLLM=${USE_VLLM:-true} DTYPE=$(DTYPE) JSON_LOGS=false \
+		USE_VLLM=false DTYPE=float32 JSON_LOGS=false \
 		uvicorn services.serving.api.app:app \
 		--host 0.0.0.0 --port 8000 --reload
 
@@ -279,7 +279,7 @@ docker-build:
 	@echo "[docker] Images built successfully."
 
 docker-up:
-	@echo "[docker] Starting dev GPU stack..."
+	@echo "[docker] Starting dev stack..."
 	docker compose -f infra/compose/docker-compose.yml --profile dev up -d
 
 docker-up-gpu:
