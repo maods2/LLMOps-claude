@@ -2,14 +2,18 @@
 # LLM Stack – Docker Compose
 # ============================================================
 # Profiles:
-#   dev:        training + serving with CPU fallback (no GPU required)
-#   production: training + serving with GPU
+#   dev:        training + serving with GPU (bfloat16 + vLLM)
+#   production: training + serving with GPU (adds restart/limits)
+#
+# Both profiles require the NVIDIA Container Toolkit on the host.
+# https://docs.nvidia.com/datacenter/cloud-native/
+#
+# To run without a GPU set NVIDIA_VISIBLE_DEVICES=none:
+#   NVIDIA_VISIBLE_DEVICES=none docker compose --profile dev up
 #
 # Usage:
-#   docker compose --profile dev up          # local development
-#   docker compose --profile production up   # full GPU stack
-#   docker compose up training               # training only
-#   docker compose up serving                # serving only
+#   docker compose --profile dev up          # dev GPU stack
+#   docker compose --profile production up   # production GPU stack
 # ============================================================
 
 version: "3.9"
@@ -70,7 +74,7 @@ services:
     profiles:
       - production
 
-  # ---- Training service (dev / CPU fallback) ----
+  # ---- Training service (dev – GPU enabled) ----
   training-dev:
     image: llm-stack-training:latest
     build:
@@ -84,9 +88,13 @@ services:
       STAGE: ${TRAINING_STAGE:-pretrain}
       OUTPUT_DIR: /app/checkpoints
       DATA_CACHE: /app/data_cache
-      DTYPE: float32
+      DTYPE: ${DTYPE:-bfloat16}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
     volumes: *common-volumes
-    shm_size: "1gb"
+    deploy:
+      resources:
+        <<: *gpu-resources
+    shm_size: "2gb"
     profiles:
       - dev
 
@@ -125,7 +133,7 @@ services:
     profiles:
       - production
 
-  # ---- Serving service (dev / no GPU) ----
+  # ---- Serving service (dev – GPU enabled) ----
   serving-dev:
     image: llm-stack-serving:latest
     build:
@@ -139,11 +147,25 @@ services:
     environment:
       <<: *common-env
       MODEL_PATH: /app/checkpoints/${MODEL_CHECKPOINT:-pretrain/final}
-      USE_VLLM: "false"
-      DTYPE: float32
+      USE_VLLM: ${USE_VLLM:-true}
+      DTYPE: ${DTYPE:-bfloat16}
       MAX_SEQ_LEN: ${MAX_SEQ_LEN:-512}
+      GPU_MEM_UTIL: ${GPU_MEM_UTIL:-0.85}
+      MODEL_VERSION: ${MODEL_VERSION:-latest}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
       - ${HOST_CHECKPOINTS:-./checkpoints}:/app/checkpoints:ro
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        <<: *gpu-resources
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     profiles:
       - dev
 
