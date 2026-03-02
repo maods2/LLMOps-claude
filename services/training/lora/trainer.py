@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoRAConfig(BaseModel):
@@ -58,8 +58,7 @@ class LoRAConfig(BaseModel):
     dtype: str = Field("bfloat16")
     gradient_checkpointing: bool = Field(True)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class _HFCompatConfig:
@@ -198,7 +197,7 @@ class LoRATrainer:
         self.val_loader = val_loader
 
         from torch.optim import AdamW
-        from torch.cuda.amp import GradScaler
+        from torch.amp import GradScaler
 
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         self.logger.info(
@@ -214,7 +213,7 @@ class LoRATrainer:
         )
         from services.training.pretrain.trainer import _get_scheduler
         self.scheduler = _get_scheduler(self.optimizer, config.warmup_steps, config.max_steps)
-        self.scaler = GradScaler(enabled=(self.dtype == torch.float16))
+        self.scaler = GradScaler("cuda", enabled=(self.dtype == torch.float16))
 
         self.global_step = 0
         self.best_val_loss = float("inf")

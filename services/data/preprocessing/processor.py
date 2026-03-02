@@ -20,7 +20,7 @@ from datasets import Dataset, DatasetDict, IterableDataset
 from torch.utils.data import DataLoader, IterableDataset as TorchIterableDataset
 from transformers import PreTrainedTokenizerFast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PreprocessingConfig(BaseModel):
@@ -35,8 +35,7 @@ class PreprocessingConfig(BaseModel):
     test_ratio: float = Field(0.01, description="Test split ratio")
     text_column: str = Field("text", description="Source text column name")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 # ---------------------------------------------------------------------------

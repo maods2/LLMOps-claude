@@ -21,12 +21,12 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from services.training.core_model.model import LLMModel
 
@@ -64,8 +64,7 @@ class PretrainConfig(BaseModel):
     # Memory
     gradient_checkpointing: bool = Field(True, description="Enable gradient checkpointing")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 def _cosine_schedule_with_warmup(
@@ -125,7 +124,7 @@ class PretrainTrainer:
         self.scheduler = _get_scheduler(
             self.optimizer, config.warmup_steps, config.max_steps
         )
-        self.scaler = GradScaler(enabled=(self.dtype == torch.float16))
+        self.scaler = GradScaler("cuda", enabled=(self.dtype == torch.float16))
 
         self.global_step: int = 0
         self.best_val_loss: float = float("inf")

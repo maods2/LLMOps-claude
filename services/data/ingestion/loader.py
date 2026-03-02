@@ -20,7 +20,7 @@ from typing import Iterator, Optional, Union
 import datasets
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DataSourceConfig(BaseModel):
@@ -38,8 +38,7 @@ class DataSourceConfig(BaseModel):
     text_column: str = Field(default="text", description="Column containing raw text")
     cache_dir: Optional[str] = Field(default=None, description="Cache directory for downloads")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 def load_wikitext2(

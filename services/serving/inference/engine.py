@@ -16,7 +16,7 @@ import os
 from typing import AsyncIterator, Iterator, Optional
 
 import torch
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class InferenceConfig(BaseModel):
@@ -30,8 +30,7 @@ class InferenceConfig(BaseModel):
     max_batch_size: int = Field(32)
     tokenizer_path: Optional[str] = Field(None, description="Tokenizer path (defaults to model_path)")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class InferenceEngine:

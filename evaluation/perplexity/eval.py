@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PerplexityConfig(BaseModel):
@@ -29,8 +29,7 @@ class PerplexityConfig(BaseModel):
     max_batches: Optional[int] = Field(None, description="Cap evaluation at N batches")
     dtype: str = Field("bfloat16")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class PerplexityResult:

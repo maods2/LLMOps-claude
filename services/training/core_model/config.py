@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ModelConfig(BaseModel):
@@ -93,5 +93,4 @@ class ModelConfig(BaseModel):
         final_norm = self.hidden_size
         return embed + self.n_layers * per_layer + output + final_norm
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)

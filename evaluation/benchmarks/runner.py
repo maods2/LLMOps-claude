@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from evaluation.perplexity.eval import PerplexityConfig, evaluate_perplexity
 from evaluation.generation_quality.eval import GenerationConfig, generate_samples
@@ -44,8 +44,7 @@ class BenchmarkConfig(BaseModel):
         None, description="Strings expected in at least one generation"
     )
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 @dataclass

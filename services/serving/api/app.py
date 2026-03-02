@@ -20,6 +20,8 @@ import os
 import time
 from typing import AsyncIterator, Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -44,10 +46,23 @@ configure_logging(
 )
 logger = get_logger(__name__)
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Pre-warm the inference engine on startup."""
+    logger.info("server_startup", msg="Warming up inference engine")
+    try:
+        engine = get_engine()
+        logger.info("engine_ready", framework=engine.framework)
+    except Exception as exc:
+        logger.error("engine_startup_failed", error=str(exc))
+    yield
+
+
 app = FastAPI(
     title="LLM Stack Serving API",
     description="Production serving for the LLM Stack Transformer model",
     version="0.1.0",
+    lifespan=_lifespan,
 )
 
 # Lazy-initialised engine (avoids GPU allocation at import time)
@@ -112,18 +127,6 @@ class VersionResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Pre-warm the inference engine."""
-    logger.info("server_startup", msg="Warming up inference engine")
-    try:
-        engine = get_engine()
-        logger.info("engine_ready", framework=engine.framework)
-    except Exception as exc:
-        logger.error("engine_startup_failed", error=str(exc))
-        # Don't crash the server; health endpoint will report degraded
-
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:

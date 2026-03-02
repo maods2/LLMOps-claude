@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GenerationConfig(BaseModel):
@@ -30,8 +30,7 @@ class GenerationConfig(BaseModel):
     do_sample: bool = Field(True)
     num_return_sequences: int = Field(1)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 @dataclass

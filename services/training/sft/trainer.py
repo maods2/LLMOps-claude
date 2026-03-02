@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from services.training.core_model.model import LLMModel
 from services.training.pretrain.trainer import (
@@ -58,8 +58,7 @@ class SFTConfig(BaseModel):
     # SFT-specific
     early_stopping_patience: int = Field(5, description="Stop if val loss doesn't improve for N evals")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class SFTTrainer:
@@ -87,7 +86,7 @@ class SFTTrainer:
             self.model.enable_gradient_checkpointing()
 
         from torch.optim import AdamW
-        from torch.cuda.amp import GradScaler
+        from torch.amp import GradScaler
 
         self.optimizer = AdamW(
             _get_param_groups(model, config.weight_decay),
@@ -97,7 +96,7 @@ class SFTTrainer:
         self.scheduler = _get_scheduler(
             self.optimizer, config.warmup_steps, config.max_steps
         )
-        self.scaler = GradScaler(enabled=(self.dtype == torch.float16))
+        self.scaler = GradScaler("cuda", enabled=(self.dtype == torch.float16))
 
         self.global_step = 0
         self.best_val_loss = float("inf")
