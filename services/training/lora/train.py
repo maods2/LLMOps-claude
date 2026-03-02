@@ -37,11 +37,12 @@ def main() -> None:
     configure_logging(service_name="lora", json_logs=False, environment="training")
     logger = get_logger(__name__)
 
-    from services.training.core_model.model import LLMModel
-    from services.training.lora.trainer import LoRAConfig, LoRATrainer
+    from torch.utils.data import DataLoader
+
     from services.data.preprocessing.processor import SFTDataset
     from services.data.tokenization.tokenizer import get_default_tokenizer
-    from torch.utils.data import DataLoader
+    from services.training.core_model.model import LLMModel
+    from services.training.lora.trainer import LoRAConfig, LoRATrainer
 
     model = LLMModel.from_pretrained(cfg.lora.base_model_path)
     tokenizer = get_default_tokenizer()

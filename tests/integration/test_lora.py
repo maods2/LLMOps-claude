@@ -74,8 +74,9 @@ class TestLoRAInjection:
         """LoRATrainer should complete one step without error."""
         pytest.importorskip("peft")
 
-        from services.training.lora.trainer import LoRAConfig, LoRATrainer
         from torch.utils.data import DataLoader
+
+        from services.training.lora.trainer import LoRAConfig, LoRATrainer
 
         cfg = LoRAConfig(
             r=4,

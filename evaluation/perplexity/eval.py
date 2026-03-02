@@ -11,13 +11,11 @@ Supports:
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import torch
 import torch.nn as nn
+from pydantic import BaseModel, ConfigDict, Field
 from torch.utils.data import DataLoader
-
-from pydantic import BaseModel, Field
 
 
 class PerplexityConfig(BaseModel):
@@ -26,11 +24,10 @@ class PerplexityConfig(BaseModel):
     max_seq_len: int = Field(512)
     stride: int = Field(256, description="Sliding-window stride for long sequences")
     batch_size: int = Field(8)
-    max_batches: Optional[int] = Field(None, description="Cap evaluation at N batches")
+    max_batches: int | None = Field(None, description="Cap evaluation at N batches")
     dtype: str = Field("bfloat16")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class PerplexityResult:
@@ -70,7 +67,7 @@ def evaluate_perplexity(
     model: nn.Module,
     dataloader: DataLoader,
     config: PerplexityConfig,
-    device: Optional[torch.device] = None,
+    device: torch.device | None = None,
 ) -> PerplexityResult:
     """Evaluate perplexity and token accuracy on a dataset.
 

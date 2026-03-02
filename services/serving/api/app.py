@@ -18,19 +18,20 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from services.serving.inference.engine import InferenceEngine, InferenceConfig
 from observability.logging.logger import configure_logging, get_logger
 from observability.metrics.prometheus import (
-    record_inference,
     ACTIVE_REQUESTS,
     collect_gpu_stats,
+    record_inference,
 )
+from services.serving.inference.engine import InferenceConfig, InferenceEngine
 
 # ---------------------------------------------------------------------------
 # App bootstrap
@@ -44,14 +45,27 @@ configure_logging(
 )
 logger = get_logger(__name__)
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Pre-warm the inference engine on startup."""
+    logger.info("server_startup", msg="Warming up inference engine")
+    try:
+        engine = get_engine()
+        logger.info("engine_ready", framework=engine.framework)
+    except Exception as exc:
+        logger.error("engine_startup_failed", error=str(exc))
+    yield
+
+
 app = FastAPI(
     title="LLM Stack Serving API",
     description="Production serving for the LLM Stack Transformer model",
     version="0.1.0",
+    lifespan=_lifespan,
 )
 
 # Lazy-initialised engine (avoids GPU allocation at import time)
-_engine: Optional[InferenceEngine] = None
+_engine: InferenceEngine | None = None
 
 
 def get_engine() -> InferenceEngine:
@@ -99,7 +113,7 @@ class BatchGenerateRequest(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
-    gpu_memory_mb: Optional[int] = None
+    gpu_memory_mb: int | None = None
 
 
 class VersionResponse(BaseModel):
@@ -112,18 +126,6 @@ class VersionResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Pre-warm the inference engine."""
-    logger.info("server_startup", msg="Warming up inference engine")
-    try:
-        engine = get_engine()
-        logger.info("engine_ready", framework=engine.framework)
-    except Exception as exc:
-        logger.error("engine_startup_failed", error=str(exc))
-        # Don't crash the server; health endpoint will report degraded
-
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
@@ -176,7 +178,7 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     except Exception as exc:
         record_inference(time.perf_counter() - t0, 0, status="500")
         logger.error("generate_error", error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         ACTIVE_REQUESTS.dec()
 
@@ -224,13 +226,13 @@ async def batch_generate(request: BatchGenerateRequest) -> JSONResponse:
             {
                 "results": [
                     {"prompt": p, "generated_text": g}
-                    for p, g in zip(request.prompts, results)
+                    for p, g in zip(request.prompts, results, strict=False)
                 ],
                 "latency_ms": round(latency_ms, 1),
             }
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         ACTIVE_REQUESTS.dec()
 
@@ -238,7 +240,7 @@ async def batch_generate(request: BatchGenerateRequest) -> JSONResponse:
 @app.get("/metrics")
 async def metrics() -> StreamingResponse:
     """Prometheus metrics endpoint."""
-    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
     content = generate_latest()
     return StreamingResponse(
         iter([content]),

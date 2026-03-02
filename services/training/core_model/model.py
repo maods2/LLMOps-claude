@@ -20,7 +20,6 @@ Parameter estimate (defaults):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -38,7 +37,7 @@ class LLMOutput:
     logits: torch.Tensor
     """Shape: (batch, seq_len, vocab_size)."""
 
-    loss: Optional[torch.Tensor] = None
+    loss: torch.Tensor | None = None
     """Cross-entropy loss when labels are supplied."""
 
 
@@ -62,8 +61,8 @@ class LLMModel(nn.Module):
 
         # Pre-build RoPE cache (will be extended on demand)
         self._rope_seq_len: int = 0
-        self._cos_cache: Optional[torch.Tensor] = None
-        self._sin_cache: Optional[torch.Tensor] = None
+        self._cos_cache: torch.Tensor | None = None
+        self._sin_cache: torch.Tensor | None = None
 
         self._init_weights()
 
@@ -109,10 +108,10 @@ class LLMModel(nn.Module):
 
     def forward(
         self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        labels: Optional[torch.Tensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
+        input_ids: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        labels: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
         **kwargs,
     ) -> LLMOutput:
         """
@@ -136,7 +135,7 @@ class LLMModel(nn.Module):
         cos, sin = self._get_rope_cache(T, device, dtype_ref)
 
         # Build additive causal attention bias from padding mask
-        attn_bias: Optional[torch.Tensor] = None
+        attn_bias: torch.Tensor | None = None
         if attention_mask is not None:
             # (B, 1, 1, T) → broadcast over heads and query positions
             pad_mask = (1.0 - attention_mask.float()).unsqueeze(1).unsqueeze(2)
@@ -151,7 +150,7 @@ class LLMModel(nn.Module):
         x = self.final_norm(x)
         logits = self.lm_head(x)  # (B, T, vocab)
 
-        loss: Optional[torch.Tensor] = None
+        loss: torch.Tensor | None = None
         if labels is not None:
             # Shift so that tokens < n predict token n
             shift_logits = logits[:, :-1, :].contiguous()
@@ -187,7 +186,7 @@ class LLMModel(nn.Module):
         object.__setattr__(self.config, "use_gradient_checkpointing", True)  # type: ignore[arg-type]
 
     @classmethod
-    def from_pretrained(cls, checkpoint_path: str) -> "LLMModel":
+    def from_pretrained(cls, checkpoint_path: str) -> LLMModel:
         """Load a model from a saved checkpoint directory."""
         import json
         import os

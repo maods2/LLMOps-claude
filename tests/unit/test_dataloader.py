@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import pytest
 import torch
 
-
 # ---------------------------------------------------------------------------
 # Offline tokenizer fixture (avoids HuggingFace Hub download in CI)
 # ---------------------------------------------------------------------------
@@ -108,7 +107,7 @@ class TestLocalJsonlLoader:
 class TestPretrainDataset:
     def test_yields_input_ids_and_labels(self, tmp_jsonl: str):
         from services.data.ingestion.loader import load_local_jsonl
-        from services.data.preprocessing.processor import PretrainDataset, PreprocessingConfig
+        from services.data.preprocessing.processor import PreprocessingConfig, PretrainDataset
 
         tokenizer = _make_offline_tokenizer()
         ds = load_local_jsonl(tmp_jsonl, streaming=True)
@@ -125,7 +124,7 @@ class TestPretrainDataset:
 
     def test_labels_shifted_from_input_ids(self, tmp_jsonl: str):
         from services.data.ingestion.loader import load_local_jsonl
-        from services.data.preprocessing.processor import PretrainDataset, PreprocessingConfig
+        from services.data.preprocessing.processor import PreprocessingConfig, PretrainDataset
 
         tokenizer = _make_offline_tokenizer()
         ds = load_local_jsonl(tmp_jsonl, streaming=False)

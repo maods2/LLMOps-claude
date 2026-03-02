@@ -8,15 +8,12 @@ Provides training and inference metric gauges/histograms.
 from __future__ import annotations
 
 import threading
-from typing import Optional
 
 from prometheus_client import (
     Counter,
     Gauge,
     Histogram,
-    Summary,
     start_http_server,
-    REGISTRY,
 )
 
 # ---------------------------------------------------------------------------
@@ -64,8 +61,8 @@ ACTIVE_REQUESTS = Gauge("llm_active_requests", "Current number of in-flight requ
 def update_train_metrics(
     loss: float,
     learning_rate: float,
-    gpu_mb: Optional[int] = None,
-    gpu_util_pct: Optional[float] = None,
+    gpu_mb: int | None = None,
+    gpu_util_pct: float | None = None,
 ) -> None:
     """Update training metrics gauges."""
     import math

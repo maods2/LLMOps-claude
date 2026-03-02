@@ -14,13 +14,11 @@ from __future__ import annotations
 import math
 import time
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
+from pydantic import BaseModel, ConfigDict, Field
 from torch.utils.data import DataLoader
-
-from pydantic import BaseModel, Field
 
 
 class LoRAConfig(BaseModel):
@@ -58,8 +56,7 @@ class LoRAConfig(BaseModel):
     dtype: str = Field("bfloat16")
     gradient_checkpointing: bool = Field(True)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class _HFCompatConfig:
@@ -111,7 +108,8 @@ def inject_lora(model: nn.Module, config: LoRAConfig) -> nn.Module:
     Returns:
         PEFT-wrapped model (only adapter params trainable).
     """
-    from peft import LoraConfig as PeftLoraConfig, get_peft_model, TaskType
+    from peft import LoraConfig as PeftLoraConfig
+    from peft import TaskType, get_peft_model
 
     peft_config = PeftLoraConfig(
         task_type=TaskType.CAUSAL_LM,
@@ -130,7 +128,6 @@ def load_qlora_model(base_model_path: str, config: LoRAConfig) -> nn.Module:
 
     Requires bitsandbytes.
     """
-    import bitsandbytes as bnb
     from peft import prepare_model_for_kbit_training
     from transformers import BitsAndBytesConfig
 
@@ -175,7 +172,7 @@ class LoRATrainer:
         self,
         model: nn.Module,
         train_loader: DataLoader,
-        val_loader: Optional[DataLoader],
+        val_loader: DataLoader | None,
         config: LoRAConfig,
         logger=None,
     ) -> None:
@@ -197,8 +194,8 @@ class LoRATrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
 
+        from torch.amp import GradScaler
         from torch.optim import AdamW
-        from torch.cuda.amp import GradScaler
 
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         self.logger.info(
@@ -214,7 +211,7 @@ class LoRATrainer:
         )
         from services.training.pretrain.trainer import _get_scheduler
         self.scheduler = _get_scheduler(self.optimizer, config.warmup_steps, config.max_steps)
-        self.scaler = GradScaler(enabled=(self.dtype == torch.float16))
+        self.scaler = GradScaler("cuda", enabled=(self.dtype == torch.float16))
 
         self.global_step = 0
         self.best_val_loss = float("inf")

@@ -9,17 +9,15 @@ Provides a unified interface for:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Optional, Union
 
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
+from tokenizers.normalizers import NFD, Lowercase, StripAccents
+from tokenizers.normalizers import Sequence as NormSequence
 from tokenizers.pre_tokenizers import Whitespace
-from tokenizers.normalizers import NFD, Lowercase, StripAccents, Sequence as NormSequence
+from tokenizers.trainers import BpeTrainer
 from transformers import PreTrainedTokenizerFast
-
 
 _SPECIAL_TOKENS = ["<pad>", "<s>", "</s>", "<unk>", "<mask>"]
 
@@ -27,7 +25,7 @@ _SPECIAL_TOKENS = ["<pad>", "<s>", "</s>", "<unk>", "<mask>"]
 def build_tokenizer_from_scratch(
     files: list[str],
     vocab_size: int = 32000,
-    save_dir: Optional[str] = None,
+    save_dir: str | None = None,
 ) -> PreTrainedTokenizerFast:
     """Train a BPE tokenizer from raw text files.
 
@@ -65,7 +63,7 @@ def build_tokenizer_from_scratch(
     return fast_tokenizer
 
 
-def load_tokenizer(path: Union[str, Path]) -> PreTrainedTokenizerFast:
+def load_tokenizer(path: str | Path) -> PreTrainedTokenizerFast:
     """Load a saved tokenizer from disk or HuggingFace Hub.
 
     Args:
@@ -80,7 +78,7 @@ def load_tokenizer(path: Union[str, Path]) -> PreTrainedTokenizerFast:
     return tok
 
 
-def get_default_tokenizer(cache_dir: Optional[str] = None) -> PreTrainedTokenizerFast:
+def get_default_tokenizer(cache_dir: str | None = None) -> PreTrainedTokenizerFast:
     """Return a suitable default tokenizer (GPT-2 BPE) for quick experiments.
 
     Downloads from HuggingFace if not cached.

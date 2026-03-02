@@ -5,15 +5,14 @@ from __future__ import annotations
 import pytest
 import torch
 
-from services.training.core_model.config import ModelConfig
-from services.training.core_model.model import LLMModel, LLMOutput
 from services.training.core_model.attention import (
-    build_rope_cache,
     apply_rope,
+    build_rope_cache,
     rotate_half,
 )
-from services.training.core_model.blocks import RMSNorm, MLP, DecoderBlock
-
+from services.training.core_model.blocks import MLP, DecoderBlock, RMSNorm
+from services.training.core_model.config import ModelConfig
+from services.training.core_model.model import LLMModel, LLMOutput
 
 # ---------------------------------------------------------------------------
 # Tiny model config for fast CPU tests

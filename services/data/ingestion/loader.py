@@ -14,13 +14,11 @@ be composed uniformly downstream.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Union
+from collections.abc import Iterator
 
 import datasets
-from datasets import Dataset, DatasetDict, IterableDataset, load_dataset
-
-from pydantic import BaseModel, Field
+from datasets import Dataset, IterableDataset, load_dataset
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DataSourceConfig(BaseModel):
@@ -29,24 +27,23 @@ class DataSourceConfig(BaseModel):
     name: str = Field(description="Dataset name: wikitext2 | openwebtext | tinystories | local")
     split: str = Field(default="train", description="Dataset split")
     streaming: bool = Field(default=True, description="Use streaming mode (saves disk space)")
-    subset_size: Optional[int] = Field(
+    subset_size: int | None = Field(
         default=None, description="Limit to N examples (for dev/testing)"
     )
-    local_path: Optional[str] = Field(
+    local_path: str | None = Field(
         default=None, description="Path to local .jsonl file (for 'local' source)"
     )
     text_column: str = Field(default="text", description="Column containing raw text")
-    cache_dir: Optional[str] = Field(default=None, description="Cache directory for downloads")
+    cache_dir: str | None = Field(default=None, description="Cache directory for downloads")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 def load_wikitext2(
     split: str = "train",
     streaming: bool = True,
-    cache_dir: Optional[str] = None,
-) -> Union[Dataset, IterableDataset]:
+    cache_dir: str | None = None,
+) -> Dataset | IterableDataset:
     """Load WikiText-2 dataset."""
     return load_dataset(
         "wikitext",
@@ -61,9 +58,9 @@ def load_wikitext2(
 def load_openwebtext(
     split: str = "train",
     streaming: bool = True,
-    subset_size: Optional[int] = 50_000,
-    cache_dir: Optional[str] = None,
-) -> Union[Dataset, IterableDataset]:
+    subset_size: int | None = 50_000,
+    cache_dir: str | None = None,
+) -> Dataset | IterableDataset:
     """Load a filtered subset of OpenWebText."""
     ds = load_dataset(
         "openwebtext",
@@ -82,8 +79,8 @@ def load_openwebtext(
 def load_tinystories(
     split: str = "train",
     streaming: bool = True,
-    cache_dir: Optional[str] = None,
-) -> Union[Dataset, IterableDataset]:
+    cache_dir: str | None = None,
+) -> Dataset | IterableDataset:
     """Load TinyStories dataset."""
     return load_dataset(
         "roneneldan/TinyStories",
@@ -98,7 +95,7 @@ def load_local_jsonl(
     path: str,
     text_column: str = "text",
     streaming: bool = True,
-) -> Union[Dataset, IterableDataset]:
+) -> Dataset | IterableDataset:
     """Load a local .jsonl file.
 
     Each line must be valid JSON with at least a ``text_column`` key.
@@ -106,7 +103,7 @@ def load_local_jsonl(
     """
     if streaming:
         def _generator() -> Iterator[dict]:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -116,7 +113,7 @@ def load_local_jsonl(
         return IterableDataset.from_generator(_generator)
     else:
         records = []
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -125,7 +122,7 @@ def load_local_jsonl(
         return Dataset.from_list(records)
 
 
-def load_source(config: DataSourceConfig) -> Union[Dataset, IterableDataset]:
+def load_source(config: DataSourceConfig) -> Dataset | IterableDataset:
     """Dispatch to the appropriate loader based on config.name."""
     name = config.name.lower()
     if name == "wikitext2":
@@ -155,7 +152,7 @@ def load_source(config: DataSourceConfig) -> Union[Dataset, IterableDataset]:
 
 def load_combined(
     sources: list[DataSourceConfig],
-) -> Union[Dataset, IterableDataset]:
+) -> Dataset | IterableDataset:
     """Load and concatenate multiple dataset sources."""
     datasets_list = [load_source(cfg) for cfg in sources]
     if not datasets_list:

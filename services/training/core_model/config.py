@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ModelConfig(BaseModel):
@@ -55,7 +55,7 @@ class ModelConfig(BaseModel):
     eos_token_id: int = Field(2, description="End-of-sequence token ID")
 
     @model_validator(mode="after")
-    def validate_heads(self) -> "ModelConfig":
+    def validate_heads(self) -> ModelConfig:
         assert self.hidden_size % self.n_heads == 0, (
             f"hidden_size ({self.hidden_size}) must be divisible by n_heads ({self.n_heads})"
         )
@@ -93,5 +93,4 @@ class ModelConfig(BaseModel):
         final_norm = self.hidden_size
         return embed + self.n_layers * per_layer + output + final_norm
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)

@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-stack"
@@ -73,10 +73,12 @@ include = ["services*", "evaluation*", "observability*"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
 ignore = ["E501", "B008", "N812"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["services", "evaluation", "observability"]
 
 [tool.mypy]

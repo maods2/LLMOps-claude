@@ -10,9 +10,7 @@ Provides a pre-configured logger factory with:
 from __future__ import annotations
 
 import logging
-import os
 import sys
-from typing import Optional
 
 import structlog
 
@@ -50,9 +48,9 @@ def configure_logging(
     ]
 
     if json_logs:
-        renderer = structlog.processors.JSONRenderer()
+        _renderer = structlog.processors.JSONRenderer()
     else:
-        renderer = structlog.dev.ConsoleRenderer(colors=True)  # type: ignore[assignment]
+        _renderer = structlog.dev.ConsoleRenderer(colors=True)  # type: ignore[assignment]
 
     structlog.configure(
         processors=[
@@ -70,7 +68,7 @@ def configure_logging(
     structlog.contextvars.bind_contextvars(service=service_name, env=environment)
 
 
-def get_logger(name: Optional[str] = None) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     """Return a configured structlog logger.
 
     Args:
