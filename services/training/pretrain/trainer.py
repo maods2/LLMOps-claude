@@ -14,19 +14,16 @@ Features:
 from __future__ import annotations
 
 import math
-import os
 import time
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
+from pydantic import BaseModel, ConfigDict, Field
 from torch.amp import GradScaler
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
-
-from pydantic import BaseModel, ConfigDict, Field
 
 from services.training.core_model.model import LLMModel
 
@@ -36,7 +33,7 @@ class PretrainConfig(BaseModel):
 
     # I/O
     output_dir: str = Field("./checkpoints/pretrain", description="Output directory")
-    resume_from: Optional[str] = Field(None, description="Path to checkpoint to resume from")
+    resume_from: str | None = Field(None, description="Path to checkpoint to resume from")
 
     # Training loop
     max_steps: int = Field(10_000, description="Maximum training steps")
@@ -98,7 +95,7 @@ class PretrainTrainer:
         self,
         model: LLMModel,
         train_loader: DataLoader,
-        val_loader: Optional[DataLoader],
+        val_loader: DataLoader | None,
         config: PretrainConfig,
         logger=None,
     ) -> None:
@@ -152,7 +149,7 @@ class PretrainTrainer:
             self.optimizer.zero_grad(set_to_none=True)
             step_loss = 0.0
 
-            for micro_step in range(self.config.gradient_accumulation_steps):
+            for _ in range(self.config.gradient_accumulation_steps):
                 try:
                     batch = next(data_iter)
                 except StopIteration:
@@ -277,7 +274,6 @@ class PretrainTrainer:
         self.logger.info("checkpoint_saved", path=str(ckpt_dir))
 
     def _load_checkpoint(self, path: str) -> None:
-        from services.training.core_model.model import LLMModel
 
         state_path = Path(path) / "training_state.pt"
         if state_path.exists():

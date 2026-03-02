@@ -15,16 +15,15 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import torch
 import torch.nn as nn
+from pydantic import BaseModel, ConfigDict, Field
 from transformers import PreTrainedTokenizerFast
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from evaluation.perplexity.eval import PerplexityConfig, evaluate_perplexity
 from evaluation.generation_quality.eval import GenerationConfig, generate_samples
+from evaluation.perplexity.eval import PerplexityConfig, evaluate_perplexity
 
 
 class BenchmarkConfig(BaseModel):
@@ -34,13 +33,13 @@ class BenchmarkConfig(BaseModel):
     type: str = Field(description="Benchmark type: perplexity | generation | regression")
 
     # Perplexity settings
-    dataset_path: Optional[str] = Field(None)
-    perplexity_config: Optional[PerplexityConfig] = Field(None)
+    dataset_path: str | None = Field(None)
+    perplexity_config: PerplexityConfig | None = Field(None)
 
     # Generation settings
-    prompts: Optional[list[str]] = Field(None)
-    generation_config: Optional[GenerationConfig] = Field(None)
-    expected_substrings: Optional[list[str]] = Field(
+    prompts: list[str] | None = Field(None)
+    generation_config: GenerationConfig | None = Field(None)
+    expected_substrings: list[str] | None = Field(
         None, description="Strings expected in at least one generation"
     )
 
@@ -65,7 +64,7 @@ class BenchmarkRunner:
         self,
         model: nn.Module,
         tokenizer: PreTrainedTokenizerFast,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
     ) -> None:
         self.model = model
         self.tokenizer = tokenizer
@@ -74,7 +73,7 @@ class BenchmarkRunner:
     def run_all(
         self,
         configs: list[BenchmarkConfig],
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
     ) -> list[BenchmarkResult]:
         """Run all benchmarks and optionally write a JSON report.
 
@@ -121,8 +120,9 @@ class BenchmarkRunner:
 
     def _run_perplexity(self, cfg: BenchmarkConfig) -> tuple[dict, bool]:
         from torch.utils.data import DataLoader
+
         from services.data.ingestion.loader import load_local_jsonl
-        from services.data.preprocessing.processor import PretrainDataset, PreprocessingConfig
+        from services.data.preprocessing.processor import PreprocessingConfig, PretrainDataset
 
         ppl_cfg = cfg.perplexity_config or PerplexityConfig()
 
@@ -163,7 +163,7 @@ class BenchmarkRunner:
         metrics = {"samples": [{"prompt": s.prompt, "generated": s.generated_text} for s in samples]}
         passed = True
         if cfg.expected_substrings:
-            for sample, expected in zip(samples, cfg.expected_substrings):
+            for sample, expected in zip(samples, cfg.expected_substrings, strict=False):
                 if expected.lower() not in sample.generated_text.lower():
                     passed = False
         return metrics, passed
