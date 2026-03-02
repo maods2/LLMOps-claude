@@ -9,14 +9,12 @@ Generates text from a set of seed prompts and optionally computes:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
-from transformers import PreTrainedTokenizerFast
-
 from pydantic import BaseModel, ConfigDict, Field
+from transformers import PreTrainedTokenizerFast
 
 
 class GenerationConfig(BaseModel):
@@ -48,7 +46,7 @@ def generate_samples(
     tokenizer: PreTrainedTokenizerFast,
     prompts: list[str],
     config: GenerationConfig,
-    device: Optional[torch.device] = None,
+    device: torch.device | None = None,
 ) -> list[GenerationResult]:
     """Generate text for a list of prompts and compute diversity metrics.
 

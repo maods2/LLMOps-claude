@@ -12,8 +12,7 @@ The same interface is exposed regardless of backend.
 from __future__ import annotations
 
 import asyncio
-import os
-from typing import AsyncIterator, Iterator, Optional
+from collections.abc import AsyncIterator
 
 import torch
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,7 +27,7 @@ class InferenceConfig(BaseModel):
     max_seq_len: int = Field(512)
     gpu_memory_utilization: float = Field(0.85, description="vLLM GPU memory fraction")
     max_batch_size: int = Field(32)
-    tokenizer_path: Optional[str] = Field(None, description="Tokenizer path (defaults to model_path)")
+    tokenizer_path: str | None = Field(None, description="Tokenizer path (defaults to model_path)")
 
     model_config = ConfigDict(frozen=True)
 
@@ -63,8 +62,8 @@ class InferenceEngine:
         self.framework = "pytorch"
 
     def _load_vllm(self, tok_path: str) -> None:
-        from vllm import LLM, SamplingParams  # type: ignore[import]
         from transformers import AutoTokenizer
+        from vllm import LLM, SamplingParams  # type: ignore[import]
 
         self._vllm = LLM(
             model=self.config.model_path,
@@ -79,8 +78,8 @@ class InferenceEngine:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
     def _load_pytorch(self, tok_path: str) -> None:
-        from services.training.core_model.model import LLMModel
         from services.data.tokenization.tokenizer import load_tokenizer
+        from services.training.core_model.model import LLMModel
 
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         dtype_map = {"float32": torch.float32, "float16": torch.float16, "bfloat16": torch.bfloat16}

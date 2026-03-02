@@ -34,11 +34,12 @@ def main() -> None:
     configure_logging(service_name="sft", json_logs=False, environment="training")
     logger = get_logger(__name__)
 
-    from services.training.core_model.model import LLMModel
-    from services.training.sft.trainer import SFTConfig, SFTTrainer
+    from torch.utils.data import DataLoader
+
     from services.data.preprocessing.processor import SFTDataset
     from services.data.tokenization.tokenizer import get_default_tokenizer
-    from torch.utils.data import DataLoader
+    from services.training.core_model.model import LLMModel
+    from services.training.sft.trainer import SFTConfig, SFTTrainer
 
     model = LLMModel.from_pretrained(cfg.sft.base_model_path)
     logger.info("base_model_loaded", path=cfg.sft.base_model_path)

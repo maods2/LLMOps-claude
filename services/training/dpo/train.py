@@ -35,11 +35,12 @@ def main() -> None:
     configure_logging(service_name="dpo", json_logs=False, environment="training")
     logger = get_logger(__name__)
 
-    from services.training.core_model.model import LLMModel
-    from services.training.dpo.trainer import DPOConfig, DPOTrainer
+    from torch.utils.data import DataLoader
+
     from services.data.preprocessing.processor import DPODataset
     from services.data.tokenization.tokenizer import get_default_tokenizer
-    from torch.utils.data import DataLoader
+    from services.training.core_model.model import LLMModel
+    from services.training.dpo.trainer import DPOConfig, DPOTrainer
 
     # Policy model (to be optimised)
     policy = LLMModel.from_pretrained(cfg.dpo.base_model_path)

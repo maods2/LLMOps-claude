@@ -16,24 +16,21 @@ Key properties:
 
 from __future__ import annotations
 
-import math
 import time
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-
 from pydantic import BaseModel, ConfigDict, Field
+from torch.utils.data import DataLoader
 
 
 class DPOConfig(BaseModel):
     """DPO training configuration."""
 
     output_dir: str = Field("./checkpoints/dpo")
-    resume_from: Optional[str] = Field(None)
+    resume_from: str | None = Field(None)
 
     max_steps: int = Field(1_000)
     eval_interval: int = Field(100)
@@ -117,9 +114,9 @@ class DPOTrainer:
     def __init__(
         self,
         policy_model: nn.Module,
-        ref_model: Optional[nn.Module],
+        ref_model: nn.Module | None,
         train_loader: DataLoader,
-        val_loader: Optional[DataLoader],
+        val_loader: DataLoader | None,
         config: DPOConfig,
         logger=None,
     ) -> None:
@@ -134,7 +131,7 @@ class DPOTrainer:
             self.policy.enable_gradient_checkpointing()
 
         # Reference model: frozen, optionally on CPU
-        self.ref: Optional[nn.Module] = None
+        self.ref: nn.Module | None = None
         if not config.reference_free and ref_model is not None:
             self.ref = ref_model
             self.ref.eval()
@@ -148,8 +145,9 @@ class DPOTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
 
-        from torch.optim import AdamW
         from torch.amp import GradScaler
+        from torch.optim import AdamW
+
         from services.training.pretrain.trainer import _get_scheduler
 
         self.optimizer = AdamW(

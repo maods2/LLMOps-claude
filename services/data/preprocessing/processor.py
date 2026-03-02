@@ -11,16 +11,12 @@ Responsibilities:
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-from typing import Any, Callable, Optional, Union
-
 import torch
-from datasets import Dataset, DatasetDict, IterableDataset
-from torch.utils.data import DataLoader, IterableDataset as TorchIterableDataset
-from transformers import PreTrainedTokenizerFast
-
+from datasets import Dataset, IterableDataset
 from pydantic import BaseModel, ConfigDict, Field
+from torch.utils.data import DataLoader
+from torch.utils.data import IterableDataset as TorchIterableDataset
+from transformers import PreTrainedTokenizerFast
 
 
 class PreprocessingConfig(BaseModel):
@@ -29,7 +25,7 @@ class PreprocessingConfig(BaseModel):
     max_seq_len: int = Field(512, description="Sequence length for packing")
     batch_size: int = Field(1000, description="Tokenisation batch size")
     num_workers: int = Field(4, description="DataLoader worker count")
-    cache_dir: Optional[str] = Field(None, description="Directory to cache processed datasets")
+    cache_dir: str | None = Field(None, description="Directory to cache processed datasets")
     seed: int = Field(42, description="Random seed for reproducibility")
     val_ratio: float = Field(0.05, description="Validation split ratio")
     test_ratio: float = Field(0.01, description="Test split ratio")
@@ -89,7 +85,7 @@ class PretrainDataset(TorchIterableDataset):
 
     def __init__(
         self,
-        hf_dataset: Union[Dataset, IterableDataset],
+        hf_dataset: Dataset | IterableDataset,
         tokenizer: PreTrainedTokenizerFast,
         config: PreprocessingConfig,
     ) -> None:
@@ -134,7 +130,7 @@ class SFTDataset(torch.utils.data.Dataset):
         records: list[dict[str, str]],
         tokenizer: PreTrainedTokenizerFast,
         max_seq_len: int = 512,
-        template: Optional[str] = None,
+        template: str | None = None,
     ) -> None:
         self.records = records
         self.tokenizer = tokenizer
@@ -241,7 +237,7 @@ class DPODataset(torch.utils.data.Dataset):
 
 
 def build_pretrain_dataloader(
-    dataset: Union[Dataset, IterableDataset],
+    dataset: Dataset | IterableDataset,
     tokenizer: PreTrainedTokenizerFast,
     config: PreprocessingConfig,
 ) -> DataLoader:

@@ -55,7 +55,7 @@ class ModelConfig(BaseModel):
     eos_token_id: int = Field(2, description="End-of-sequence token ID")
 
     @model_validator(mode="after")
-    def validate_heads(self) -> "ModelConfig":
+    def validate_heads(self) -> ModelConfig:
         assert self.hidden_size % self.n_heads == 0, (
             f"hidden_size ({self.hidden_size}) must be divisible by n_heads ({self.n_heads})"
         )

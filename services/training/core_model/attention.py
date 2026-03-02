@@ -10,14 +10,12 @@ Supports:
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from services.training.core_model.config import ModelConfig
-
 
 # ---------------------------------------------------------------------------
 # RoPE helpers
@@ -27,7 +25,7 @@ def build_rope_cache(
     seq_len: int,
     head_dim: int,
     theta: float = 10000.0,
-    device: Optional[torch.device] = None,
+    device: torch.device | None = None,
     dtype: torch.dtype = torch.float32,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Build cos/sin cache tensors for RoPE.
@@ -111,7 +109,7 @@ class CausalSelfAttention(nn.Module):
         x: torch.Tensor,
         cos: torch.Tensor,
         sin: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
+        attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -151,7 +149,7 @@ class CausalSelfAttention(nn.Module):
         q: torch.Tensor,
         k: torch.Tensor,
         v: torch.Tensor,
-        attention_mask: Optional[torch.Tensor],
+        attention_mask: torch.Tensor | None,
         B: int,
         T: int,
     ) -> torch.Tensor:

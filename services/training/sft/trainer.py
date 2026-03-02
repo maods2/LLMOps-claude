@@ -12,18 +12,14 @@ from __future__ import annotations
 import math
 import time
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-
 from pydantic import BaseModel, ConfigDict, Field
+from torch.utils.data import DataLoader
 
 from services.training.core_model.model import LLMModel
 from services.training.pretrain.trainer import (
-    PretrainConfig,
-    PretrainTrainer,
     _get_param_groups,
     _get_scheduler,
     _gpu_memory_mb,
@@ -35,7 +31,7 @@ class SFTConfig(BaseModel):
     """SFT-specific configuration (extends pretrain settings)."""
 
     output_dir: str = Field("./checkpoints/sft")
-    resume_from: Optional[str] = Field(None)
+    resume_from: str | None = Field(None)
 
     max_steps: int = Field(3_000)
     eval_interval: int = Field(200)
@@ -68,7 +64,7 @@ class SFTTrainer:
         self,
         model: LLMModel,
         train_loader: DataLoader,
-        val_loader: Optional[DataLoader],
+        val_loader: DataLoader | None,
         config: SFTConfig,
         logger=None,
     ) -> None:
@@ -85,8 +81,8 @@ class SFTTrainer:
         if config.gradient_checkpointing:
             self.model.enable_gradient_checkpointing()
 
-        from torch.optim import AdamW
         from torch.amp import GradScaler
+        from torch.optim import AdamW
 
         self.optimizer = AdamW(
             _get_param_groups(model, config.weight_decay),

@@ -7,8 +7,6 @@ Transformer building blocks:
 
 from __future__ import annotations
 
-from typing import Optional
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -64,7 +62,7 @@ class DecoderBlock(nn.Module):
         x: torch.Tensor,
         cos: torch.Tensor,
         sin: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
+        attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         x = x + self.attn(self.attn_norm(x), cos, sin, attention_mask)
         x = x + self.mlp(self.mlp_norm(x))

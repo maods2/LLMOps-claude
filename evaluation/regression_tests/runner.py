@@ -9,14 +9,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
-from transformers import PreTrainedTokenizerFast
-
 from pydantic import BaseModel, Field
+from transformers import PreTrainedTokenizerFast
 
 from evaluation.generation_quality.eval import GenerationConfig, generate_samples
 
@@ -47,8 +44,8 @@ class RegressionTestRunner:
         self,
         model: nn.Module,
         tokenizer: PreTrainedTokenizerFast,
-        device: Optional[torch.device] = None,
-        gen_config: Optional[GenerationConfig] = None,
+        device: torch.device | None = None,
+        gen_config: GenerationConfig | None = None,
     ) -> None:
         self.model = model
         self.tokenizer = tokenizer

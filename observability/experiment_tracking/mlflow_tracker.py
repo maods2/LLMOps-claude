@@ -14,9 +14,10 @@ Features:
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any
 
 _MLFLOW_AVAILABLE = False
 try:
@@ -40,7 +41,7 @@ class MLflowTracker:
     def __init__(
         self,
         experiment_name: str = "llm-stack",
-        tracking_uri: Optional[str] = None,
+        tracking_uri: str | None = None,
         enabled: bool = True,
     ) -> None:
         self.enabled = enabled and _MLFLOW_AVAILABLE
@@ -54,8 +55,8 @@ class MLflowTracker:
     @contextmanager
     def start_run(
         self,
-        run_name: Optional[str] = None,
-        tags: Optional[dict[str, str]] = None,
+        run_name: str | None = None,
+        tags: dict[str, str] | None = None,
     ) -> Iterator[None]:
         """Context manager that starts an MLflow run and ends it on exit."""
         if not self.enabled:
@@ -75,17 +76,17 @@ class MLflowTracker:
             # MLflow param values must be strings ≤ 500 chars
             mlflow.log_params({k: str(v)[:500] for k, v in params.items()})
 
-    def log_metric(self, key: str, value: float, step: Optional[int] = None) -> None:
+    def log_metric(self, key: str, value: float, step: int | None = None) -> None:
         """Log a scalar metric."""
         if self.enabled and mlflow.active_run():
             mlflow.log_metric(key, value, step=step)
 
-    def log_metrics(self, metrics: dict[str, float], step: Optional[int] = None) -> None:
+    def log_metrics(self, metrics: dict[str, float], step: int | None = None) -> None:
         """Log multiple scalar metrics at once."""
         if self.enabled and mlflow.active_run():
             mlflow.log_metrics(metrics, step=step)
 
-    def log_artifact(self, path: str, artifact_path: Optional[str] = None) -> None:
+    def log_artifact(self, path: str, artifact_path: str | None = None) -> None:
         """Log a file or directory as an MLflow artefact."""
         if self.enabled and mlflow.active_run():
             p = Path(path)

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import copy
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -22,7 +21,6 @@ import torch
 
 from services.training.core_model.config import ModelConfig
 from services.training.core_model.model import LLMModel
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -143,7 +141,7 @@ class TestPretrainRealData:
         from torch.utils.data import DataLoader
 
         from services.data.ingestion.loader import load_local_jsonl
-        from services.data.preprocessing.processor import PretrainDataset, PreprocessingConfig
+        from services.data.preprocessing.processor import PreprocessingConfig, PretrainDataset
 
         jsonl = tmp_path / "pretrain.jsonl"
         # Repeat texts to produce enough packed chunks for multi-batch testing
@@ -306,8 +304,9 @@ class TestSFTRealData:
 
     def test_sft_loss_is_finite_on_real_data(self, fresh_model, real_tokenizer):
         """SFT loss computed on real text must be a finite positive scalar."""
-        from services.data.preprocessing.processor import SFTDataset
         from torch.utils.data import DataLoader
+
+        from services.data.preprocessing.processor import SFTDataset
 
         ds = SFTDataset(_SFT_PAIRS, real_tokenizer, max_seq_len=32)
         loader = DataLoader(ds, batch_size=2, drop_last=True)
@@ -325,9 +324,10 @@ class TestSFTRealData:
 
     def test_sft_with_val_set_real_data(self, fresh_model, real_tokenizer, tmp_path):
         """SFT trainer with a validation set should log val loss without error."""
+        from torch.utils.data import DataLoader
+
         from services.data.preprocessing.processor import SFTDataset
         from services.training.sft.trainer import SFTConfig, SFTTrainer
-        from torch.utils.data import DataLoader
 
         train_ds = SFTDataset(_SFT_PAIRS[:4], real_tokenizer, max_seq_len=32)
         val_ds = SFTDataset(_SFT_PAIRS[4:], real_tokenizer, max_seq_len=32)
@@ -358,8 +358,9 @@ class TestLoRARealData:
     """LoRA fine-tuning using real instruction-response pairs."""
 
     def _make_loader(self, tokenizer, batch_size=2):
-        from services.data.preprocessing.processor import SFTDataset
         from torch.utils.data import DataLoader
+
+        from services.data.preprocessing.processor import SFTDataset
 
         ds = SFTDataset(_SFT_PAIRS, tokenizer, max_seq_len=32)
         return DataLoader(ds, batch_size=batch_size, drop_last=True)
@@ -412,14 +413,14 @@ class TestLoRARealData:
         """LoRA forward pass on real tokenized text must produce finite loss."""
         pytest.importorskip("peft")
 
+        from torch.utils.data import DataLoader
+
         from services.data.preprocessing.processor import SFTDataset
         from services.training.lora.trainer import LoRAConfig, inject_lora
-        from torch.utils.data import DataLoader
 
         ds = SFTDataset(_SFT_PAIRS, real_tokenizer, max_seq_len=32)
         batch = next(iter(DataLoader(ds, batch_size=2, drop_last=True)))
 
-        from services.training.lora.trainer import LoRAConfig, inject_lora
         cfg = LoRAConfig(r=4, lora_alpha=8.0, target_modules=["q_proj"], output_dir="/tmp", max_steps=1)
         lora_model = inject_lora(fresh_model, cfg)
 
@@ -453,8 +454,9 @@ class TestDPORealData:
     """DPO training using real (prompt, chosen, rejected) pairs."""
 
     def _make_dpo_loader(self, tokenizer, batch_size=2):
-        from services.data.preprocessing.processor import DPODataset
         from torch.utils.data import DataLoader
+
+        from services.data.preprocessing.processor import DPODataset
 
         ds = DPODataset(_DPO_PAIRS, tokenizer, max_seq_len=32)
         return DataLoader(ds, batch_size=batch_size, drop_last=True)

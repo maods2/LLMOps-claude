@@ -14,13 +14,11 @@ from __future__ import annotations
 import math
 import time
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-
 from pydantic import BaseModel, ConfigDict, Field
+from torch.utils.data import DataLoader
 
 
 class LoRAConfig(BaseModel):
@@ -110,7 +108,8 @@ def inject_lora(model: nn.Module, config: LoRAConfig) -> nn.Module:
     Returns:
         PEFT-wrapped model (only adapter params trainable).
     """
-    from peft import LoraConfig as PeftLoraConfig, get_peft_model, TaskType
+    from peft import LoraConfig as PeftLoraConfig
+    from peft import TaskType, get_peft_model
 
     peft_config = PeftLoraConfig(
         task_type=TaskType.CAUSAL_LM,
@@ -129,7 +128,6 @@ def load_qlora_model(base_model_path: str, config: LoRAConfig) -> nn.Module:
 
     Requires bitsandbytes.
     """
-    import bitsandbytes as bnb
     from peft import prepare_model_for_kbit_training
     from transformers import BitsAndBytesConfig
 
@@ -174,7 +172,7 @@ class LoRATrainer:
         self,
         model: nn.Module,
         train_loader: DataLoader,
-        val_loader: Optional[DataLoader],
+        val_loader: DataLoader | None,
         config: LoRAConfig,
         logger=None,
     ) -> None:
@@ -196,8 +194,8 @@ class LoRATrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
 
-        from torch.optim import AdamW
         from torch.amp import GradScaler
+        from torch.optim import AdamW
 
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         self.logger.info(

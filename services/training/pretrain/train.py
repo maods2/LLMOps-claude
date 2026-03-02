@@ -9,7 +9,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import sys
 
 from omegaconf import OmegaConf
 
@@ -69,14 +68,13 @@ def main() -> None:
     )
 
     # Build data
+
     from services.data.ingestion.loader import DataSourceConfig, load_source
     from services.data.preprocessing.processor import (
-        PretrainDataset,
         PreprocessingConfig,
         build_pretrain_dataloader,
     )
     from services.data.tokenization.tokenizer import get_default_tokenizer
-    from torch.utils.data import DataLoader
 
     tokenizer = get_default_tokenizer(cache_dir=cfg.data.get("cache_dir"))
     pp_cfg = PreprocessingConfig(
