@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from omegaconf import OmegaConf
 
@@ -26,8 +27,17 @@ def main() -> None:
     parser.add_argument("--resume_from", type=str, default=None)
     args = parser.parse_args()
 
-    # Load base config
-    cfg = OmegaConf.load(args.config)
+    # Load base config, resolving any Hydra-style `defaults` lists manually
+    # (plain OmegaConf.load does not process `defaults`)
+    config_path = Path(args.config)
+    cfg = OmegaConf.load(config_path)
+    if "defaults" in cfg:
+        config_dir = config_path.parent
+        merged = OmegaConf.create({})
+        for entry in cfg.defaults:
+            name = entry if isinstance(entry, str) else list(entry.values())[0]
+            merged = OmegaConf.merge(merged, OmegaConf.load(config_dir / f"{name}.yaml"))
+        cfg = OmegaConf.merge(merged, OmegaConf.masked_copy(cfg, [k for k in cfg if k != "defaults"]))
 
     # Apply CLI overrides
     if args.output_dir:
