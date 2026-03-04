@@ -61,12 +61,23 @@ def main() -> None:
     )
     logger = get_logger(__name__)
 
-    # Build model
+    # Build tokenizer first — model vocab_size must match the actual tokenizer
+    from services.data.tokenization.tokenizer import get_default_tokenizer
+
+    tokenizer = get_default_tokenizer(cache_dir=cfg.data.get("cache_dir"))
+
+    # Build model with vocab_size derived from the tokenizer to avoid
+    # embedding index-out-of-bounds errors at runtime
     from services.training.core_model.config import ModelConfig
     from services.training.core_model.model import LLMModel
     from services.training.pretrain.trainer import PretrainConfig, PretrainTrainer
 
-    model_cfg = ModelConfig(**OmegaConf.to_container(cfg.model, resolve=True))
+    model_cfg_dict = OmegaConf.to_container(cfg.model, resolve=True)
+    model_cfg_dict["vocab_size"] = len(tokenizer)
+    model_cfg_dict["pad_token_id"] = tokenizer.pad_token_id or 0
+    model_cfg_dict["bos_token_id"] = tokenizer.bos_token_id or tokenizer.eos_token_id
+    model_cfg_dict["eos_token_id"] = tokenizer.eos_token_id
+    model_cfg = ModelConfig(**model_cfg_dict)
     model = LLMModel(model_cfg)
 
     n_params = model.num_parameters()
@@ -84,9 +95,6 @@ def main() -> None:
         PreprocessingConfig,
         build_pretrain_dataloader,
     )
-    from services.data.tokenization.tokenizer import get_default_tokenizer
-
-    tokenizer = get_default_tokenizer(cache_dir=cfg.data.get("cache_dir"))
     pp_cfg = PreprocessingConfig(
         max_seq_len=cfg.data.max_seq_len,
         batch_size=cfg.pretrain.batch_size,
