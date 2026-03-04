@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 from omegaconf import OmegaConf
 
@@ -23,7 +24,16 @@ def main() -> None:
     parser.add_argument("--max_steps", type=int, default=None)
     args = parser.parse_args()
 
-    cfg = OmegaConf.load(args.config)
+    config_path = Path(args.config)
+    cfg = OmegaConf.load(config_path)
+    if "defaults" in cfg:
+        config_dir = config_path.parent
+        merged = OmegaConf.create({})
+        for entry in cfg.defaults:
+            name = entry if isinstance(entry, str) else list(entry.values())[0]
+            merged = OmegaConf.merge(merged, OmegaConf.load(config_dir / f"{name}.yaml"))
+        cfg = OmegaConf.merge(merged, OmegaConf.masked_copy(cfg, [k for k in cfg if k != "defaults"]))
+
     if args.output_dir:
         cfg.sft.output_dir = args.output_dir
     if args.base_model_path:
@@ -38,11 +48,25 @@ def main() -> None:
 
     from services.data.preprocessing.processor import SFTDataset
     from services.data.tokenization.tokenizer import get_default_tokenizer
+    from services.training.core_model.config import ModelConfig
     from services.training.core_model.model import LLMModel
     from services.training.sft.trainer import SFTConfig, SFTTrainer
 
-    model = LLMModel.from_pretrained(cfg.sft.base_model_path)
-    logger.info("base_model_loaded", path=cfg.sft.base_model_path)
+    base_model_path = cfg.sft.base_model_path
+    checkpoint_config = Path(base_model_path) / "config.json"
+    if checkpoint_config.exists():
+        model = LLMModel.from_pretrained(base_model_path)
+        logger.info("base_model_loaded", path=base_model_path)
+    else:
+        logger.warning(
+            "base_model_not_found",
+            path=base_model_path,
+            message="Checkpoint not found; initialising model from scratch using model config",
+        )
+        model_cfg_dict = OmegaConf.to_container(cfg.model, resolve=True)
+        model_cfg = ModelConfig(**model_cfg_dict)
+        model = LLMModel(model_cfg)
+        logger.info("base_model_initialised_from_scratch", n_params=model.num_parameters())
 
     tokenizer = get_default_tokenizer()
 
